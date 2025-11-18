@@ -1,0 +1,217 @@
+version: '3.8'
+
+services:
+  # Databases
+  postgres:
+    image: postgres:15-alpine
+    container_name: library-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: library_system
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: library-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: library-rabbitmq
+    ports:
+      - "5672:5672"      # AMQP port
+      - "15672:15672"    # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Services (uncomment and configure as you build them)
+  # user-service:
+  #   build: ../user-service
+  #   container_name: library-user-service
+  #   ports:
+  #     - "3001:3001"
+  #   environment:
+  #     - DB_HOST=postgres
+  #     - DB_PORT=5432
+  #     - DB_NAME=user_db
+  #     - DB_USER=postgres
+  #     - DB_PASSWORD=postgres
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - RABBITMQ_HOST=rabbitmq
+  #     - RABBITMQ_PORT=5672
+  #     - RABBITMQ_USER=admin
+  #     - RABBITMQ_PASS=admin
+  #     - GRPC_PORT=50051
+  #     - PORT=3001
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
+
+  # catalog-service:
+  #   build: ../catalog-service
+  #   container_name: library-catalog-service
+  #   ports:
+  #     - "3002:3002"
+  #   environment:
+  #     - DB_HOST=postgres
+  #     - DB_PORT=5432
+  #     - DB_NAME=catalog_db
+  #     - DB_USER=postgres
+  #     - DB_PASSWORD=postgres
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - PORT=3002
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+
+  # booking-service:
+  #   build: ../booking-service
+  #   container_name: library-booking-service
+  #   ports:
+  #     - "3003:3003"
+  #   environment:
+  #     - DB_HOST=postgres
+  #     - DB_PORT=5432
+  #     - DB_NAME=booking_db
+  #     - DB_USER=postgres
+  #     - DB_PASSWORD=postgres
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - USER_SERVICE_URL=http://user-service:3001
+  #     - CATALOG_SERVICE_URL=http://catalog-service:3002
+  #     - POLICY_SERVICE_URL=http://policy-service:3004
+  #     - PORT=3003
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+
+  # policy-service:
+  #   build: ../policy-service
+  #   container_name: library-policy-service
+  #   ports:
+  #     - "3004:3004"
+  #   environment:
+  #     - DB_HOST=postgres
+  #     - DB_PORT=5432
+  #     - DB_NAME=policy_db
+  #     - DB_USER=postgres
+  #     - DB_PASSWORD=postgres
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - PORT=3004
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+
+  # notification-service:
+  #   build: ../notification-service
+  #   container_name: library-notification-service
+  #   ports:
+  #     - "3005:3005"
+  #   environment:
+  #     - DB_HOST=postgres
+  #     - DB_PORT=5432
+  #     - DB_NAME=notification_db
+  #     - DB_USER=postgres
+  #     - DB_PASSWORD=postgres
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - PORT=3005
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+
+  # analytics-service:
+  #   build: ../analytics-service
+  #   container_name: library-analytics-service
+  #   ports:
+  #     - "3006:3006"
+  #   environment:
+  #     - DB_HOST=postgres
+  #     - DB_PORT=5432
+  #     - DB_NAME=analytics_db
+  #     - DB_USER=postgres
+  #     - DB_PASSWORD=postgres
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - PORT=3006
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+
+  # realtime-gateway:
+  #   build: ../realtime-gateway
+  #   container_name: library-realtime-gateway
+  #   ports:
+  #     - "3007:3007"
+  #   environment:
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - PORT=3007
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+
+  # frontend-web:
+  #   build: ../frontend-web
+  #   container_name: library-frontend
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - REACT_APP_API_URL=http://localhost:8080
+  #     - REACT_APP_WS_URL=ws://localhost:3007
+  #   depends_on:
+  #     - user-service
+  #     - catalog-service
+  #     - booking-service
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+
+networks:
+  default:
+    name: library-network
+
