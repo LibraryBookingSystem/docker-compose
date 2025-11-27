@@ -50,39 +50,52 @@ services:
       timeout: 5s
       retries: 5
 
-  # Services (uncomment and configure as you build them)
-  # user-service:
-  #   build: ../user-service
-  #   container_name: library-user-service
-  #   ports:
-  #     - "3001:3001"
-  #   environment:
-  #     - DB_HOST=postgres
-  #     - DB_PORT=5432
-  #     - DB_NAME=user_db
-  #     - DB_USER=postgres
-  #     - DB_PASSWORD=postgres
-  #     - REDIS_HOST=redis
-  #     - REDIS_PORT=6379
-  #     - RABBITMQ_HOST=rabbitmq
-  #     - RABBITMQ_PORT=5672
-  #     - RABBITMQ_USER=admin
-  #     - RABBITMQ_PASS=admin
-  #     - GRPC_PORT=50051
-  #     - PORT=3001
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-  #     rabbitmq:
-  #       condition: service_healthy
+  # Services
+  user-service:
+    build: ../user-service
+    container_name: library-user-service
+    ports:
+      - "3001:3001"
+      - "50051:50051"  # gRPC port
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=user_db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASS=admin
+      - GRPC_PORT=50051
+      - JWT_SECRET=my-super-secret-jwt-key-for-library-booking-system-2024
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  auth-service:
+    build: ../auth-service
+    container_name: library-auth-service
+    ports:
+      - "3002:3002"
+    environment:
+      - USER_SERVICE_URL=http://user-service:3001
+      - JWT_SECRET=my-super-secret-jwt-key-for-library-booking-system-2024
+      - JWT_EXPIRATION=3600000
+    depends_on:
+      - user-service
 
   # catalog-service:
   #   build: ../catalog-service
   #   container_name: library-catalog-service
   #   ports:
-  #     - "3002:3002"
+  #     - "3003:3003"
   #   environment:
   #     - DB_HOST=postgres
   #     - DB_PORT=5432
@@ -91,7 +104,7 @@ services:
   #     - DB_PASSWORD=postgres
   #     - REDIS_HOST=redis
   #     - REDIS_PORT=6379
-  #     - PORT=3002
+  #     - PORT=3003
   #   depends_on:
   #     postgres:
   #       condition: service_healthy
@@ -102,7 +115,7 @@ services:
   #   build: ../booking-service
   #   container_name: library-booking-service
   #   ports:
-  #     - "3003:3003"
+  #     - "3004:3004"
   #   environment:
   #     - DB_HOST=postgres
   #     - DB_PORT=5432
@@ -112,9 +125,9 @@ services:
   #     - REDIS_HOST=redis
   #     - REDIS_PORT=6379
   #     - USER_SERVICE_URL=http://user-service:3001
-  #     - CATALOG_SERVICE_URL=http://catalog-service:3002
-  #     - POLICY_SERVICE_URL=http://policy-service:3004
-  #     - PORT=3003
+  #     - CATALOG_SERVICE_URL=http://catalog-service:3003
+  #     - POLICY_SERVICE_URL=http://policy-service:3005
+  #     - PORT=3004
   #   depends_on:
   #     postgres:
   #       condition: service_healthy
@@ -125,31 +138,11 @@ services:
   #   build: ../policy-service
   #   container_name: library-policy-service
   #   ports:
-  #     - "3004:3004"
-  #   environment:
-  #     - DB_HOST=postgres
-  #     - DB_PORT=5432
-  #     - DB_NAME=policy_db
-  #     - DB_USER=postgres
-  #     - DB_PASSWORD=postgres
-  #     - REDIS_HOST=redis
-  #     - REDIS_PORT=6379
-  #     - PORT=3004
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-
-  # notification-service:
-  #   build: ../notification-service
-  #   container_name: library-notification-service
-  #   ports:
   #     - "3005:3005"
   #   environment:
   #     - DB_HOST=postgres
   #     - DB_PORT=5432
-  #     - DB_NAME=notification_db
+  #     - DB_NAME=policy_db
   #     - DB_USER=postgres
   #     - DB_PASSWORD=postgres
   #     - REDIS_HOST=redis
@@ -161,15 +154,15 @@ services:
   #     redis:
   #       condition: service_healthy
 
-  # analytics-service:
-  #   build: ../analytics-service
-  #   container_name: library-analytics-service
+  # notification-service:
+  #   build: ../notification-service
+  #   container_name: library-notification-service
   #   ports:
   #     - "3006:3006"
   #   environment:
   #     - DB_HOST=postgres
   #     - DB_PORT=5432
-  #     - DB_NAME=analytics_db
+  #     - DB_NAME=notification_db
   #     - DB_USER=postgres
   #     - DB_PASSWORD=postgres
   #     - REDIS_HOST=redis
@@ -181,15 +174,35 @@ services:
   #     redis:
   #       condition: service_healthy
 
+  # analytics-service:
+  #   build: ../analytics-service
+  #   container_name: library-analytics-service
+  #   ports:
+  #     - "3007:3007"
+  #   environment:
+  #     - DB_HOST=postgres
+  #     - DB_PORT=5432
+  #     - DB_NAME=analytics_db
+  #     - DB_USER=postgres
+  #     - DB_PASSWORD=postgres
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - PORT=3007
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+
   # realtime-gateway:
   #   build: ../realtime-gateway
   #   container_name: library-realtime-gateway
   #   ports:
-  #     - "3007:3007"
+  #     - "3008:3008"
   #   environment:
   #     - REDIS_HOST=redis
   #     - REDIS_PORT=6379
-  #     - PORT=3007
+  #     - PORT=3008
   #   depends_on:
   #     redis:
   #       condition: service_healthy
@@ -201,8 +214,9 @@ services:
   #     - "3000:3000"
   #   environment:
   #     - REACT_APP_API_URL=http://localhost:8080
-  #     - REACT_APP_WS_URL=ws://localhost:3007
+  #     - REACT_APP_WS_URL=ws://localhost:3008
   #   depends_on:
+  #     - auth-service
   #     - user-service
   #     - catalog-service
   #     - booking-service
