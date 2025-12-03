@@ -19,6 +19,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - library-network
 
   redis:
     image: redis:7-alpine
@@ -32,6 +34,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - library-network
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -49,6 +53,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - library-network
 
   # Services
   user-service:
@@ -78,6 +84,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+    networks:
+      - library-network
 
   auth-service:
     build: ../auth-service
@@ -89,137 +97,171 @@ services:
       - JWT_SECRET=my-super-secret-jwt-key-for-library-booking-system-2024
       - JWT_EXPIRATION=3600000
     depends_on:
+      user-service:
+        condition: service_started
+    networks:
+      - library-network
+    restart: on-failure
+
+  catalog-service:
+    build: ../catalog-service
+    container_name: library-catalog-service
+    ports:
+      - "3003:3003"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=catalog_db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASS=admin
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - library-network
+
+  policy-service:
+    build: ../policy-service
+    container_name: library-policy-service
+    ports:
+      - "3005:3005"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=policy_db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASS=admin
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - library-network
+
+  booking-service:
+    build: ../booking-service
+    container_name: library-booking-service
+    ports:
+      - "3004:3004"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=booking_db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASS=admin
+      - USER_SERVICE_URL=http://user-service:3001
+      - CATALOG_SERVICE_URL=http://catalog-service:3003
+      - POLICY_SERVICE_URL=http://policy-service:3005
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+      catalog-service:
+        condition: service_started
+      policy-service:
+        condition: service_started
+    networks:
+      - library-network
+
+  notification-service:
+    build: ../notification-service
+    container_name: library-notification-service
+    ports:
+      - "3006:3006"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=notification_db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASS=admin
+      - MAIL_ENABLED=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - library-network
+
+  analytics-service:
+    build: ../analytics-service
+    container_name: library-analytics-service
+    ports:
+      - "3007:3007"
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=analytics_db
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASS=admin
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - library-network
+
+  # API Gateway (Nginx)
+  api-gateway:
+    build: ../api-gateway
+    container_name: library-api-gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
       - user-service
+      - catalog-service
+      - policy-service
+      - booking-service
+      - notification-service
+      - analytics-service
+      - realtime-gateway
+    networks:
+      - library-network
 
-  # catalog-service:
-  #   build: ../catalog-service
-  #   container_name: library-catalog-service
-  #   ports:
-  #     - "3003:3003"
-  #   environment:
-  #     - DB_HOST=postgres
-  #     - DB_PORT=5432
-  #     - DB_NAME=catalog_db
-  #     - DB_USER=postgres
-  #     - DB_PASSWORD=postgres
-  #     - REDIS_HOST=redis
-  #     - REDIS_PORT=6379
-  #     - PORT=3003
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-
-  # booking-service:
-  #   build: ../booking-service
-  #   container_name: library-booking-service
-  #   ports:
-  #     - "3004:3004"
-  #   environment:
-  #     - DB_HOST=postgres
-  #     - DB_PORT=5432
-  #     - DB_NAME=booking_db
-  #     - DB_USER=postgres
-  #     - DB_PASSWORD=postgres
-  #     - REDIS_HOST=redis
-  #     - REDIS_PORT=6379
-  #     - USER_SERVICE_URL=http://user-service:3001
-  #     - CATALOG_SERVICE_URL=http://catalog-service:3003
-  #     - POLICY_SERVICE_URL=http://policy-service:3005
-  #     - PORT=3004
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-
-  # policy-service:
-  #   build: ../policy-service
-  #   container_name: library-policy-service
-  #   ports:
-  #     - "3005:3005"
-  #   environment:
-  #     - DB_HOST=postgres
-  #     - DB_PORT=5432
-  #     - DB_NAME=policy_db
-  #     - DB_USER=postgres
-  #     - DB_PASSWORD=postgres
-  #     - REDIS_HOST=redis
-  #     - REDIS_PORT=6379
-  #     - PORT=3005
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-
-  # notification-service:
-  #   build: ../notification-service
-  #   container_name: library-notification-service
-  #   ports:
-  #     - "3006:3006"
-  #   environment:
-  #     - DB_HOST=postgres
-  #     - DB_PORT=5432
-  #     - DB_NAME=notification_db
-  #     - DB_USER=postgres
-  #     - DB_PASSWORD=postgres
-  #     - REDIS_HOST=redis
-  #     - REDIS_PORT=6379
-  #     - PORT=3006
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-
-  # analytics-service:
-  #   build: ../analytics-service
-  #   container_name: library-analytics-service
-  #   ports:
-  #     - "3007:3007"
-  #   environment:
-  #     - DB_HOST=postgres
-  #     - DB_PORT=5432
-  #     - DB_NAME=analytics_db
-  #     - DB_USER=postgres
-  #     - DB_PASSWORD=postgres
-  #     - REDIS_HOST=redis
-  #     - REDIS_PORT=6379
-  #     - PORT=3007
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_healthy
-
-  # realtime-gateway:
-  #   build: ../realtime-gateway
-  #   container_name: library-realtime-gateway
-  #   ports:
-  #     - "3008:3008"
-  #   environment:
-  #     - REDIS_HOST=redis
-  #     - REDIS_PORT=6379
-  #     - PORT=3008
-  #   depends_on:
-  #     redis:
-  #       condition: service_healthy
-
-  # frontend-web:
-  #   build: ../frontend-web
-  #   container_name: library-frontend
-  #   ports:
-  #     - "3000:3000"
-  #   environment:
-  #     - REACT_APP_API_URL=http://localhost:8080
-  #     - REACT_APP_WS_URL=ws://localhost:3008
-  #   depends_on:
-  #     - auth-service
-  #     - user-service
-  #     - catalog-service
-  #     - booking-service
+  # Realtime Gateway - WebSocket service for real-time updates
+  realtime-gateway:
+    build: ../realtime-gateway
+    container_name: library-realtime-gateway
+    ports:
+      - "3008:3008"
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASS=admin
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - library-network
 
 volumes:
   postgres_data:
@@ -227,6 +269,6 @@ volumes:
   rabbitmq_data:
 
 networks:
-  default:
-    name: library-network
+  library-network:
+    driver: bridge
 
