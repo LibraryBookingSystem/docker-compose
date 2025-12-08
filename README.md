@@ -32,6 +32,26 @@ This docker-compose file sets up the entire library booking system with all micr
 
 ## Starting the System
 
+### Option 1: Complete Automated Setup (Recommended)
+
+From the `docker-compose` directory:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File setup-complete.ps1
+```
+
+This script will:
+1. ✅ Check if Docker is running
+2. ✅ Rebuild all services (clean build with `--no-cache`)
+3. ✅ Start all services
+4. ✅ Wait for services to be ready
+5. ✅ Verify API Gateway is accessible
+6. ✅ Initialize dummy data automatically
+
+**Note**: This takes several minutes but ensures a clean, complete setup.
+
+### Option 2: Manual Start
+
 From the `docker-compose` directory:
 
 ```bash
@@ -42,6 +62,8 @@ This will:
 1. Start all infrastructure services (postgres, redis, rabbitmq)
 2. Build and start all microservices
 3. Start the nginx API gateway
+
+**Then initialize dummy data** (see "Initializing Dummy Data" section below).
 
 ## Initializing Dummy Data
 

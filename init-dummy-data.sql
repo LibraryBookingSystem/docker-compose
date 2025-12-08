@@ -143,35 +143,49 @@ INSERT INTO booking_policies (name, max_duration_minutes, max_advance_days, max_
 ON CONFLICT (name) DO NOTHING;
 
 -- ============================================================================
--- SECTION 3: USER_DB - Hardcoded Admin User
+-- SECTION 3: USER_DB - Hardcoded Users (Admin, Student, Faculty)
 -- ============================================================================
 -- Database: user_db
--- Creates: 1 admin user (admin1)
+-- Creates: 3 hardcoded users (admin1, student1, faculty1)
 --
--- IMPORTANT: Admin user should be created via API to ensure correct password hashing
+-- IMPORTANT: Users should be created via API to ensure correct password hashing
 -- Use: powershell -ExecutionPolicy Bypass -File setup-admin-user.ps1
+--      powershell -ExecutionPolicy Bypass -File setup-dummy-users.ps1
 --
--- Admin credentials:
---   Username: admin1
---   Password: 12345678a
---   Email: admin@gmail.com
---   Role: ADMIN
+-- User credentials:
+--   Admin:
+--     Username: admin1
+--     Password: 12345678a
+--     Email: admin@gmail.com
+--     Role: ADMIN
 --
--- NOTE: This section only approves an existing admin user
--- The user must be created via API first (see setup-admin-user.ps1)
+--   Student:
+--     Username: student1
+--     Password: 12345678s
+--     Email: student1@example.com
+--     Role: STUDENT
 --
--- To run this section (only if user exists):
+--   Faculty:
+--     Username: faculty1
+--     Password: 12345678f
+--     Email: faculty1@example.com
+--     Role: FACULTY
+--
+-- NOTE: This section only approves existing users
+-- The users must be created via API first (see setup scripts above)
+--
+-- To run this section (only if users exist):
 --   docker exec -i library-postgres psql -U postgres -d user_db << 'EOF'
 --   [copy Section 3 SQL here]
 --   EOF
 
--- Update existing user to ensure it's approved
+-- Update existing users to ensure they're approved
 UPDATE users 
 SET pending_approval = false, 
     rejected = false, 
     restricted = false,
     updated_at = NOW()
-WHERE username = 'admin1';
+WHERE username IN ('admin1', 'student1', 'faculty1');
 
 -- ============================================================================
 -- NOTES AND SUMMARY
@@ -180,7 +194,7 @@ WHERE username = 'admin1';
 -- What gets created:
 --   - Resources: 18 total (6 study rooms, 6 computer stations, 6 seats)
 --   - Policies: 4 default booking policies
---   - Admin User: 1 hardcoded admin (created via API, approved via SQL)
+--   - Users: 3 hardcoded users (admin1, student1, faculty1) - created via API, approved via SQL
 --
 -- What is NOT created here (created dynamically):
 --   - Bookings: Created by users through the application
@@ -195,6 +209,7 @@ WHERE username = 'admin1';
 --   - init-dummy-data.sql - This merged file (all sections)
 --   - init-dummy-data-catalog.sql - Section 1 extract (for convenience)
 --   - init-dummy-data-policy.sql - Section 2 extract (for convenience)
---   - setup-admin-user.ps1 - Section 3 handler (uses API)
+--   - setup-admin-user.ps1 - Creates admin user via API
+--   - setup-dummy-users.ps1 - Creates student and faculty users via API
 --
 -- ============================================================================
