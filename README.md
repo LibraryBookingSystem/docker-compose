@@ -43,6 +43,48 @@ This will:
 2. Build and start all microservices
 3. Start the nginx API gateway
 
+## Initializing Dummy Data
+
+After services are running, initialize dummy data:
+
+**Recommended (automated):**
+```powershell
+powershell -ExecutionPolicy Bypass -File init-dummy-data-all.ps1
+```
+
+**Manual (per database):**
+```powershell
+# Resources (catalog_db)
+docker cp init-dummy-data-catalog.sql library-postgres:/tmp/init-dummy-data-catalog.sql
+docker exec -i library-postgres psql -U postgres -d catalog_db -f /tmp/init-dummy-data-catalog.sql
+
+# Policies (policy_db)
+docker cp init-dummy-data-policy.sql library-postgres:/tmp/init-dummy-data-policy.sql
+docker exec -i library-postgres psql -U postgres -d policy_db -f /tmp/init-dummy-data-policy.sql
+
+# Admin User (user_db - via API)
+powershell -ExecutionPolicy Bypass -File setup-admin-user.ps1
+```
+
+**Files:**
+- `init-dummy-data.sql` - **Merged file** containing all dummy data sections (catalog, policy, user)
+- `init-dummy-data-catalog.sql` - Section 1 extract for catalog_db (convenience file)
+- `init-dummy-data-policy.sql` - Section 2 extract for policy_db (convenience file)
+- `setup-admin-user.ps1` - **Unified admin user script** (replaces multiple admin scripts)
+- `init-dummy-data-all.ps1` - Automated script to run all initialization steps
+
+**Admin User Script Usage:**
+```powershell
+# Full setup (create new or recreate existing)
+powershell -ExecutionPolicy Bypass -File setup-admin-user.ps1
+
+# Only approve existing user
+powershell -ExecutionPolicy Bypass -File setup-admin-user.ps1 -ApproveOnly
+
+# Force recreate (delete and create new)
+powershell -ExecutionPolicy Bypass -File setup-admin-user.ps1 -Recreate
+```
+
 ## Accessing Services
 
 - **API Gateway**: http://localhost:8080
