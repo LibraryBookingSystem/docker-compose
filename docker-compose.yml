@@ -102,10 +102,16 @@ services:
       - JWT_EXPIRATION=3600000
     depends_on:
       user-service:
-        condition: service_healthy
+        condition: service_started
     networks:
       - library-network
     restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 3002 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
 
   catalog-service:
     build: ../catalog-service
