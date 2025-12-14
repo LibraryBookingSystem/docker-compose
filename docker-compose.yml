@@ -39,8 +39,8 @@ services:
     image: rabbitmq:3-management-alpine
     container_name: library-rabbitmq
     ports:
-      - "5672:5672"      # AMQP port
-      - "15672:15672"    # Management UI
+      - "5672:5672" # AMQP port
+      - "15672:15672" # Management UI
     environment:
       RABBITMQ_DEFAULT_USER: admin
       RABBITMQ_DEFAULT_PASS: admin
@@ -60,7 +60,7 @@ services:
     container_name: library-user-service
     ports:
       - "3001:3001"
-      - "50051:50051"  # gRPC port
+      - "50051:50051" # gRPC port
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -282,4 +282,3 @@ volumes:
 networks:
   library-network:
     driver: bridge
-

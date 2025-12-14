@@ -34,9 +34,18 @@ This docker-compose file sets up the entire library booking system with all micr
 
 From the `docker-compose` directory:
 
-```bash
-docker compose up -d
+**PowerShell (Recommended):**
+```powershell
+powershell -ExecutionPolicy Bypass -File build-and-start.ps1
 ```
+
+**Or manually with BuildKit enabled:**
+```powershell
+$env:DOCKER_BUILDKIT = 1
+docker compose up -d --build
+```
+
+**Note:** The Dockerfiles use BuildKit features (cache mounts), so BuildKit must be enabled. If you encounter "frontend grpc server closed unexpectedly" errors, ensure BuildKit is enabled by setting `DOCKER_BUILDKIT=1`.
 
 This will:
 1. Start all infrastructure services (postgres, redis, rabbitmq)
@@ -130,8 +139,16 @@ docker compose logs -f booking-service
 ## Rebuilding Services
 
 After code changes, rebuild and restart:
-```bash
+
+**PowerShell:**
+```powershell
+$env:DOCKER_BUILDKIT = 1
 docker compose up -d --build
+```
+
+**Or use the helper script:**
+```powershell
+powershell -ExecutionPolicy Bypass -File build-and-start.ps1
 ```
 
 ## Health Checks
