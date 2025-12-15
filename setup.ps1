@@ -1,65 +1,128 @@
 # ============================================================================
-# Library System - Complete Setup Script
+# Complete Setup Script for Library Booking System
 # ============================================================================
-# This script handles the complete setup process:
-#   1. Builds common-aspects library
-#   2. Builds all microservices
-#   3. Starts all services
-#   4. Waits for services to be ready
-#   5. Initializes dummy data (catalog and policy)
-#   6. Creates and approves admin user
+# This script performs a complete setup:
+#   1. Checks if Docker is running
+#   2. Builds common-aspects library
+#   3. Rebuilds all services
+#   4. Starts all services
+#   5. Waits for services to be ready
+#   6. Verifies API Gateway
+#   7. Initializes dummy data
+#   8. Final verification
 #
 # Usage:
-#   .\setup.ps1              # Full setup (build, start, initialize)
-#   .\setup.ps1 -NoCache     # Build without cache
-#   .\setup.ps1 -SkipBuild   # Skip build, just start and initialize
-#   .\setup.ps1 -SkipInit    # Skip initialization (data and admin user)
+#   powershell -ExecutionPolicy Bypass -File setup.ps1
+#
+# Run this from the docker-compose directory
 # ============================================================================
 
-param(
-    [switch]$NoCache,      # Build without cache
-    [switch]$SkipBuild,    # Skip build steps
-    [switch]$SkipInit,     # Skip data initialization
-    [switch]$SkipCommonAspects  # Skip common-aspects build
-)
+$ErrorActionPreference = "Continue"
 
-$ErrorActionPreference = "Stop"
-
-# Get the script directory (docker-compose)
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$projectRoot = Split-Path -Parent $scriptDir
+# Initialize tracking variables
+$script:stepResults = @{}
+$script:errors = @()
+$script:overallSuccess = $true
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  Library System - Complete Setup      " -ForegroundColor Cyan
+Write-Host "Library Booking System - Complete Setup" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Enable BuildKit for Docker builds
-$env:DOCKER_BUILDKIT = "1"
-$env:COMPOSE_DOCKER_CLI_BUILD = "1"
-
-# ============================================================================
-# STEP 1: Build common-aspects library
-# ============================================================================
-if (-not $SkipBuild -and -not $SkipCommonAspects) {
-    Write-Host "[1/5] Building common-aspects library..." -ForegroundColor Yellow
+# Step 1: Check if Docker is running
+Write-Host "Step 1: Checking Docker..." -ForegroundColor Yellow
+try {
+    $dockerVersion = docker --version 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Docker command failed"
+    }
+    Write-Host "  [OK] Docker is installed: $dockerVersion" -ForegroundColor Green
     
-    $commonAspectsPath = Join-Path $projectRoot "common-aspects"
+    # Check if Docker daemon is running
+    $null = docker info 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $errorMsg = "Docker daemon is not running"
+        $script:errors += "Step 1: $errorMsg"
+        $script:stepResults["Step 1: Docker Check"] = "FAILED"
+        $script:overallSuccess = $false
+        Write-Host "  [ERROR] $errorMsg" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "Please start Docker Desktop and try again." -ForegroundColor Yellow
+        exit 1
+    }
+    Write-Host "  [OK] Docker daemon is running" -ForegroundColor Green
+    $script:stepResults["Step 1: Docker Check"] = "SUCCESS"
+} catch {
+    $errorMsg = "Docker is not installed or not accessible"
+    $script:errors += "Step 1: $errorMsg"
+    $script:stepResults["Step 1: Docker Check"] = "FAILED"
+    $script:overallSuccess = $false
+    Write-Host "  [ERROR] $errorMsg" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Please install Docker Desktop from: https://www.docker.com/get-started" -ForegroundColor Yellow
+    exit 1
+}
+
+Write-Host ""
+
+# Step 2: Stop existing containers (if any)
+Write-Host "Step 2: Stopping existing containers..." -ForegroundColor Yellow
+try {
+    $stopOutput = docker compose down 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "  [OK] Done" -ForegroundColor Green
+        $script:stepResults["Step 2: Stop Containers"] = "SUCCESS"
+    } else {
+        $errorMsg = "Failed to stop containers: $stopOutput"
+        $script:errors += "Step 2: $errorMsg"
+        $script:stepResults["Step 2: Stop Containers"] = "WARNING"
+        Write-Host "  [WARN] $errorMsg" -ForegroundColor Yellow
+    }
+} catch {
+    $errorMsg = "Exception while stopping containers: $($_.Exception.Message)"
+    $script:errors += "Step 2: $errorMsg"
+    $script:stepResults["Step 2: Stop Containers"] = "WARNING"
+    Write-Host "  [WARN] $errorMsg" -ForegroundColor Yellow
+}
+
+Write-Host ""
+
+# Step 3: Build common-aspects library
+Write-Host "Step 3: Building common-aspects library..." -ForegroundColor Yellow
+$scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
+if (-not $scriptPath) {
+    $scriptPath = Get-Location
+}
+$projectRoot = Split-Path -Parent $scriptPath
+$commonAspectsPath = Join-Path $projectRoot "common-aspects"
+
+try {
     if (-not (Test-Path $commonAspectsPath)) {
-        Write-Host "  [ERROR] common-aspects directory not found at $commonAspectsPath" -ForegroundColor Red
+        $errorMsg = "common-aspects directory not found at $commonAspectsPath"
+        $script:errors += "Step 3: $errorMsg"
+        $script:stepResults["Step 3: Build Common-Aspects"] = "FAILED"
+        $script:overallSuccess = $false
+        Write-Host "  [ERROR] $errorMsg" -ForegroundColor Red
+        Write-Host "  Please ensure common-aspects repository is cloned in the workspace root." -ForegroundColor Yellow
         exit 1
     }
     
-    $buildCmd = "docker run --rm -v `"${commonAspectsPath}:/app`" -w /app maven:3.9-eclipse-temurin-17 mvn clean package -DskipTests -B"
+    Write-Host "  Building common-aspects with Maven (verbose output)..." -ForegroundColor Gray
+    Write-Host "  ========================================" -ForegroundColor DarkGray
     
-    Write-Host "  Running: docker build..." -ForegroundColor Gray
-    Invoke-Expression $buildCmd
+    # Stream output in real-time - docker run outputs directly to console
+    docker run --rm -v "${commonAspectsPath}:/app" -w /app maven:3.9-eclipse-temurin-17 mvn clean package -DskipTests -B
     
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "  [ERROR] Failed to build common-aspects!" -ForegroundColor Red
+        $errorMsg = "Failed to build common-aspects (exit code: $LASTEXITCODE)"
+        $script:errors += "Step 3: $errorMsg"
+        $script:stepResults["Step 3: Build Common-Aspects"] = "FAILED"
+        $script:overallSuccess = $false
+        Write-Host "  [ERROR] $errorMsg" -ForegroundColor Red
         exit 1
     }
     
+    Write-Host "  ========================================" -ForegroundColor DarkGray
     Write-Host "  [OK] common-aspects built successfully" -ForegroundColor Green
     
     # Copy common-aspects jar to each service's libs directory
@@ -67,251 +130,429 @@ if (-not $SkipBuild -and -not $SkipCommonAspects) {
     $jarPath = Join-Path $commonAspectsPath "target\common-aspects-1.0.0.jar"
     
     if (-not (Test-Path $jarPath)) {
-        Write-Host "  [ERROR] common-aspects jar not found at $jarPath" -ForegroundColor Red
+        $errorMsg = "common-aspects jar not found at $jarPath"
+        $script:errors += "Step 3: $errorMsg"
+        $script:stepResults["Step 3: Build Common-Aspects"] = "FAILED"
+        $script:overallSuccess = $false
+        Write-Host "  [ERROR] $errorMsg" -ForegroundColor Red
         exit 1
     }
     
+    Write-Host "  Copying JAR to service libs directories..." -ForegroundColor Gray
+    $copyErrors = @()
     foreach ($service in $services) {
         $libsDir = Join-Path $projectRoot "${service}\libs"
-        if (-not (Test-Path $libsDir)) {
-            New-Item -ItemType Directory -Path $libsDir -Force | Out-Null
+        try {
+            if (-not (Test-Path $libsDir)) {
+                New-Item -ItemType Directory -Path $libsDir -Force | Out-Null
+            }
+            Copy-Item $jarPath $libsDir -Force | Out-Null
+            Write-Host "    [OK] Copied to ${service}" -ForegroundColor DarkGreen
+        } catch {
+            $copyErrors += "Failed to copy to ${service}: $($_.Exception.Message)"
+            Write-Host "    [ERROR] Failed to copy to ${service}" -ForegroundColor Red
         }
-        Copy-Item $jarPath $libsDir -Force | Out-Null
     }
     
-    Write-Host "  [OK] Copied common-aspects jar to all service libs directories" -ForegroundColor Green
-    Write-Host ""
-}
-
-# ============================================================================
-# STEP 2: Build all services with docker-compose
-# ============================================================================
-if (-not $SkipBuild) {
-    Write-Host "[2/5] Building all services with docker-compose..." -ForegroundColor Yellow
-    
-    Push-Location $scriptDir
-    
-    $composeCmd = "docker compose build --parallel"
-    if ($NoCache) {
-        $composeCmd = "docker compose build --parallel --no-cache"
+    if ($copyErrors.Count -gt 0) {
+        $errorMsg = "Some copies failed: $($copyErrors -join '; ')"
+        $script:errors += "Step 3: $errorMsg"
+        $script:stepResults["Step 3: Build Common-Aspects"] = "WARNING"
+        Write-Host "  [WARN] $errorMsg" -ForegroundColor Yellow
+    } else {
+        Write-Host "  [OK] Copied common-aspects jar to all service libs directories" -ForegroundColor Green
+        $script:stepResults["Step 3: Build Common-Aspects"] = "SUCCESS"
     }
-    
-    Write-Host "  Running: $composeCmd" -ForegroundColor Gray
-    Invoke-Expression $composeCmd
-    
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "  [ERROR] Failed to build services!" -ForegroundColor Red
-        Pop-Location
-        exit 1
-    }
-    
-    Pop-Location
-    Write-Host "  [OK] All services built successfully" -ForegroundColor Green
-    Write-Host ""
-}
-
-# ============================================================================
-# STEP 3: Start all services
-# ============================================================================
-Write-Host "[3/5] Starting all services..." -ForegroundColor Yellow
-
-Push-Location $scriptDir
-docker compose up -d
-Pop-Location
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "  [ERROR] Failed to start services!" -ForegroundColor Red
+} catch {
+    $errorMsg = "Exception while building common-aspects: $($_.Exception.Message)"
+    $script:errors += "Step 3: $errorMsg"
+    $script:stepResults["Step 3: Build Common-Aspects"] = "FAILED"
+    $script:overallSuccess = $false
+    Write-Host "  [ERROR] $errorMsg" -ForegroundColor Red
     exit 1
 }
 
-Write-Host "  [OK] Services started" -ForegroundColor Green
 Write-Host ""
 
-# ============================================================================
-# STEP 4: Wait for services to be ready
-# ============================================================================
-Write-Host "[4/5] Waiting for services to be ready..." -ForegroundColor Yellow
+# Step 4: Rebuild all services
+Write-Host "Step 4: Rebuilding all services (this may take several minutes)..." -ForegroundColor Yellow
+Write-Host "  This will rebuild all microservices and the API gateway..." -ForegroundColor Gray
+Write-Host "  Showing verbose build output..." -ForegroundColor Gray
+Write-Host "  ========================================" -ForegroundColor DarkGray
 
-$maxWaitTime = 120  # seconds
-$waitInterval = 5   # seconds
-$elapsed = 0
-$apiBaseUrl = "http://localhost:8080"
+# Try building with cache first
+$buildSuccess = $false
+$buildErrors = @()
+try {
+    Write-Host "  Attempting build with cache..." -ForegroundColor Cyan
+    Write-Host ""
+    
+    # Stream output directly - show all build progress
+    docker compose build
+    
+    if ($LASTEXITCODE -eq 0) {
+        $buildSuccess = $true
+        Write-Host ""
+        Write-Host "  ========================================" -ForegroundColor DarkGray
+        Write-Host "  [OK] All services rebuilt successfully" -ForegroundColor Green
+        $script:stepResults["Step 4: Rebuild Services"] = "SUCCESS"
+    } else {
+        $errorMsg = "Build failed with cache (exit code: $LASTEXITCODE)"
+        $script:stepResults["Step 4: Rebuild Services"] = "FAILED"
+        $script:errors += "Step 4: $errorMsg"
+        Write-Host ""
+        Write-Host "  ========================================" -ForegroundColor DarkGray
+        Write-Host "  [ERROR] Build failed. See output above." -ForegroundColor Red
+    }
+} catch {
+    $errorMsg = "Exception during build with cache: $($_.Exception.Message)"
+    $script:stepResults["Step 4: Rebuild Services"] = "FAILED"
+    $script:errors += "Step 4: $errorMsg"
+    Write-Host ""
+    Write-Host "  [ERROR] Build with cache had issues: $($_.Exception.Message)" -ForegroundColor Red
+}
 
-Write-Host "  Waiting for API gateway to be available..." -ForegroundColor Gray
-while ($elapsed -lt $maxWaitTime) {
+# If build failed due to cache issues, prune cache and retry
+if (-not $buildSuccess) {
+    Write-Host ""
+    Write-Host "  Build cache issue detected. Pruning Docker build cache..." -ForegroundColor Yellow
+    docker builder prune -f 2>&1 | Out-Null
+    Write-Host "  Retrying build without cache..." -ForegroundColor Cyan
+    Write-Host "  ========================================" -ForegroundColor DarkGray
+    
     try {
-        $response = Invoke-WebRequest -Uri "$apiBaseUrl/api/auth/health" -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+        # Stream output directly - show all build progress
+        docker compose build --no-cache
+        
+        if ($LASTEXITCODE -ne 0) {
+            $errorMsg = "Build failed even after cache prune (exit code: $LASTEXITCODE)"
+            $script:errors += "Step 4: $errorMsg"
+            $script:stepResults["Step 4: Rebuild Services"] = "FAILED"
+            $script:overallSuccess = $false
+            Write-Host ""
+            Write-Host "  ========================================" -ForegroundColor DarkGray
+            Write-Host "  [ERROR] Build failed even after cache prune. Check the output above for errors." -ForegroundColor Red
+            Write-Host "  [INFO] Exit code: $LASTEXITCODE" -ForegroundColor Gray
+            Write-Host "  You may need to manually run: docker builder prune -af" -ForegroundColor Yellow
+            exit 1
+        }
+        Write-Host ""
+        Write-Host "  ========================================" -ForegroundColor DarkGray
+        Write-Host "  [OK] All services rebuilt successfully (after cache prune)" -ForegroundColor Green
+        $script:stepResults["Step 4: Rebuild Services"] = "SUCCESS"
+    } catch {
+        $errorMsg = "Exception during build after cache prune: $($_.Exception.Message)"
+        $script:errors += "Step 4: $errorMsg"
+        $script:stepResults["Step 4: Rebuild Services"] = "FAILED"
+        $script:overallSuccess = $false
+        Write-Host ""
+        Write-Host "  [ERROR] Build failed even after cache prune." -ForegroundColor Red
+        Write-Host "  [INFO] Exception: $($_.Exception.Message)" -ForegroundColor Gray
+        Write-Host "  You may need to manually run: docker builder prune -af" -ForegroundColor Yellow
+        exit 1
+    }
+}
+
+Write-Host ""
+
+# Step 5: Start all services
+Write-Host "Step 5: Starting all services..." -ForegroundColor Yellow
+$startErrors = @()
+try {
+    Write-Host "  Starting containers..." -ForegroundColor Gray
+    $startOutput = docker compose up -d 2>&1 | ForEach-Object {
+        $line = $_
+        if ($line -match "ERROR|error|Error|FAILED|Failed|failed|Cannot|unable|Unable") {
+            Write-Host "  [ERROR] $line" -ForegroundColor Red
+            $startErrors += $line
+        } else {
+            Write-Host "  $line" -ForegroundColor Gray
+        }
+        $line
+    }
+    
+    if ($LASTEXITCODE -ne 0) {
+        $errorMsg = "Failed to start services (exit code: $LASTEXITCODE)"
+        if ($startErrors.Count -gt 0) {
+            $errorMsg += ". Errors: $($startErrors[0..([Math]::Min(3, $startErrors.Count-1))] -join '; ')"
+        }
+        $script:errors += "Step 5: $errorMsg"
+        $script:stepResults["Step 5: Start Services"] = "FAILED"
+        $script:overallSuccess = $false
+        Write-Host "  [ERROR] Failed to start services. Check the output above for details." -ForegroundColor Red
+        Write-Host "  [INFO] Exit code: $LASTEXITCODE" -ForegroundColor Gray
+        Write-Host "  You can check logs: docker compose logs [service-name]" -ForegroundColor Yellow
+        exit 1
+    }
+    Write-Host "  [OK] Services started" -ForegroundColor Green
+    $script:stepResults["Step 5: Start Services"] = "SUCCESS"
+} catch {
+    $errorMsg = "Exception while starting services: $($_.Exception.Message)"
+    $script:errors += "Step 5: $errorMsg"
+    $script:stepResults["Step 5: Start Services"] = "FAILED"
+    $script:overallSuccess = $false
+    Write-Host "  [ERROR] Failed to start services" -ForegroundColor Red
+    Write-Host "  [INFO] Exception: $($_.Exception.Message)" -ForegroundColor Gray
+    Write-Host "  You can check logs: docker compose logs [service-name]" -ForegroundColor Yellow
+    exit 1
+}
+
+Write-Host ""
+
+# Step 6: Wait for services to be ready
+Write-Host "Step 6: Waiting for services to be ready..." -ForegroundColor Yellow
+Write-Host "  Waiting for infrastructure services (PostgreSQL, Redis, RabbitMQ)..." -ForegroundColor Gray
+Start-Sleep -Seconds 15
+
+Write-Host "  Waiting for microservices to start and create database tables..." -ForegroundColor Gray
+Start-Sleep -Seconds 30
+
+# Check if services are running
+Write-Host "  Checking service status..." -ForegroundColor Gray
+$serviceCheckSuccess = $false
+try {
+    $serviceOutput = docker compose ps --format json 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $errorMsg = "Failed to get service status: $serviceOutput"
+        $script:errors += "Step 6: $errorMsg"
+        $script:stepResults["Step 6: Service Readiness"] = "WARNING"
+        Write-Host "  [WARN] $errorMsg" -ForegroundColor Yellow
+    } elseif ($serviceOutput -and $serviceOutput.Trim()) {
+        try {
+            $services = $serviceOutput | ConvertFrom-Json
+            # Handle both single object and array
+            if ($services -isnot [Array]) {
+                $services = @($services)
+            }
+            $runningServices = $services | Where-Object { $_.State -eq "running" }
+            $totalServices = $services.Count
+            
+            Write-Host "  [OK] $($runningServices.Count)/$totalServices services are running" -ForegroundColor Green
+            
+            if ($runningServices.Count -lt $totalServices) {
+                $notRunning = $services | Where-Object { $_.State -ne "running" } | ForEach-Object { "$($_.Name): $($_.State)" }
+                $errorMsg = "Only $($runningServices.Count)/$totalServices services are running. Not running: $($notRunning -join ', ')"
+                Write-Host "  [WARN] Some services may still be starting. Waiting additional 30 seconds..." -ForegroundColor Yellow
+                Write-Host "  [INFO] Services not running: $($notRunning -join ', ')" -ForegroundColor Gray
+                Start-Sleep -Seconds 30
+                $script:stepResults["Step 5: Service Readiness"] = "WARNING"
+                $script:errors += "Step 5: $errorMsg"
+            } else {
+                $serviceCheckSuccess = $true
+                $script:stepResults["Step 6: Service Readiness"] = "SUCCESS"
+            }
+        } catch {
+            $errorMsg = "Could not parse service status JSON: $($_.Exception.Message). Raw output: $serviceOutput"
+            $script:errors += "Step 5: $errorMsg"
+            $script:stepResults["Step 5: Service Readiness"] = "WARNING"
+            Write-Host "  [WARN] Could not parse service status. Continuing..." -ForegroundColor Yellow
+            Write-Host "  [INFO] Error details: $($_.Exception.Message)" -ForegroundColor Gray
+        }
+    } else {
+        $errorMsg = "Service status output is empty"
+        $script:errors += "Step 6: $errorMsg"
+        $script:stepResults["Step 6: Service Readiness"] = "WARNING"
+        Write-Host "  [WARN] Could not check service status. Continuing..." -ForegroundColor Yellow
+    }
+} catch {
+    $errorMsg = "Exception while checking service status: $($_.Exception.Message)"
+    $script:errors += "Step 5: $errorMsg"
+    $script:stepResults["Step 5: Service Readiness"] = "WARNING"
+    Write-Host "  [WARN] Could not check service status. Continuing..." -ForegroundColor Yellow
+    Write-Host "  [INFO] Error details: $($_.Exception.Message)" -ForegroundColor Gray
+}
+
+Write-Host ""
+
+# Step 7: Verify API Gateway is accessible
+Write-Host "Step 7: Verifying API Gateway..." -ForegroundColor Yellow
+$maxRetries = 10
+$retryCount = 0
+$gatewayReady = $false
+
+$lastGatewayError = $null
+while ($retryCount -lt $maxRetries -and -not $gatewayReady) {
+    try {
+        $response = Invoke-WebRequest -Uri "http://localhost:8080/api/auth/health" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
         if ($response.StatusCode -eq 200) {
-            Write-Host "  [OK] API gateway is ready" -ForegroundColor Green
-            break
+            $gatewayReady = $true
+            Write-Host "  [OK] API Gateway is accessible" -ForegroundColor Green
         }
     } catch {
-        # Service not ready yet, continue waiting
+        $lastGatewayError = $_.Exception.Message
+        $retryCount++
+        if ($retryCount -lt $maxRetries) {
+            Write-Host "  Waiting for API Gateway... (attempt $retryCount/$maxRetries)" -ForegroundColor Gray
+            Start-Sleep -Seconds 5
+        }
     }
-    
-    Start-Sleep -Seconds $waitInterval
-    $elapsed += $waitInterval
-    Write-Host "  Still waiting... ($elapsed/$maxWaitTime seconds)" -ForegroundColor Gray
 }
 
-if ($elapsed -ge $maxWaitTime) {
-    Write-Host "  [WARN] Timeout waiting for services. They may still be starting." -ForegroundColor Yellow
-    Write-Host "  You can check status with: docker compose ps" -ForegroundColor Gray
+if (-not $gatewayReady) {
+    $errorMsg = "API Gateway not accessible after $maxRetries attempts"
+    if ($lastGatewayError) {
+        $errorMsg += ": $lastGatewayError"
+    }
+    Write-Host "  [WARN] API Gateway may not be ready yet. Continuing anyway..." -ForegroundColor Yellow
+    Write-Host "  [INFO] Last error: $lastGatewayError" -ForegroundColor Gray
+    Write-Host "  You can check manually: curl http://localhost:8080/api/auth/health" -ForegroundColor Gray
+    $script:stepResults["Step 7: API Gateway Verification"] = "WARNING"
+    $script:errors += "Step 7: $errorMsg"
 } else {
-    # Give services a bit more time to fully initialize
-    Write-Host "  Waiting additional 10 seconds for services to fully initialize..." -ForegroundColor Gray
-    Start-Sleep -Seconds 10
+    $script:stepResults["Step 7: API Gateway Verification"] = "SUCCESS"
 }
 
 Write-Host ""
 
-# ============================================================================
-# STEP 5: Initialize data and admin user
-# ============================================================================
-if (-not $SkipInit) {
-    Write-Host "[5/5] Initializing data and admin user..." -ForegroundColor Yellow
-    
-    # Admin user configuration
-    $adminUsername = "admin1"
-    $adminEmail = "admin@gmail.com"
-    $adminPassword = "12345678a"
-    $adminRole = "ADMIN"
-    $registerUrl = "$apiBaseUrl/api/auth/register"
-    
-    # Function to check if user exists
-    function Test-AdminUserExists {
-        $result = docker exec library-postgres psql -U postgres -d user_db -t -A -c "SELECT username FROM users WHERE username = '$adminUsername';" 2>&1
-        return ($result -and $result.Trim() -eq $adminUsername)
-    }
-    
-    # Function to approve user
-    function Approve-AdminUser {
-        Write-Host "  Approving admin user..." -ForegroundColor Gray
-        $updateResult = docker exec library-postgres psql -U postgres -d user_db -c @"
-UPDATE users 
-SET pending_approval = false, 
-    rejected = false, 
-    restricted = false,
-    updated_at = NOW()
-WHERE username = '$adminUsername';
-"@ | Out-Null
+# Step 8: Initialize dummy data
+Write-Host "Step 8: Initializing dummy data..." -ForegroundColor Yellow
+$scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
+if (-not $scriptPath) {
+    $scriptPath = Get-Location
+}
+$initScript = Join-Path $scriptPath "init-dummy-data-all.ps1"
+
+if (Test-Path $initScript) {
+    Write-Host "  Running init-dummy-data-all.ps1..." -ForegroundColor Gray
+    try {
+        # Capture both stdout and stderr
+        $initOutput = & $initScript 2>&1
+        $initExitCode = $LASTEXITCODE
         
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "    [OK] User approved" -ForegroundColor Green
-            return $true
+        if ($initExitCode -eq 0) {
+            Write-Host "  [OK] Dummy data initialized successfully" -ForegroundColor Green
+            $script:stepResults["Step 8: Initialize Dummy Data"] = "SUCCESS"
         } else {
-            Write-Host "    [ERROR] Failed to approve user" -ForegroundColor Red
-            return $false
-        }
-    }
-    
-    # Function to delete user
-    function Remove-AdminUser {
-        Write-Host "  Removing existing admin user..." -ForegroundColor Gray
-        docker exec library-postgres psql -U postgres -d user_db -c "DELETE FROM users WHERE username = '$adminUsername' OR email = '$adminEmail';" | Out-Null
-        Start-Sleep -Seconds 1
-    }
-    
-    # Function to create user via API
-    function New-AdminUser {
-        Write-Host "  Registering admin user via API..." -ForegroundColor Gray
-        
-        $userData = @{
-            username = $adminUsername
-            email = $adminEmail
-            password = $adminPassword
-            role = $adminRole
-        } | ConvertTo-Json
-        
-        try {
-            $response = Invoke-RestMethod -Uri $registerUrl -Method Post -Body $userData -ContentType "application/json" -ErrorAction Stop
-            Write-Host "    [OK] User registered successfully" -ForegroundColor Green
-            Start-Sleep -Seconds 2
-            return $true
-        } catch {
-            $statusCode = $_.Exception.Response.StatusCode.value__
-            
-            if ($statusCode -eq 409) {
-                Write-Host "    [WARN] User already exists, will approve existing user" -ForegroundColor Yellow
-                return $true
-            } else {
-                Write-Host "    [ERROR] Registration failed: $($_.Exception.Message)" -ForegroundColor Red
-                return $false
+            $errorMsg = "Dummy data initialization failed with exit code: $initExitCode"
+            # Check if there are any error messages in the output
+            $errorLines = $initOutput | Where-Object { $_ -match "ERROR|Error|error|FAILED|Failed|failed|Exception" }
+            if ($errorLines) {
+                $errorMsg += ". Errors found: $($errorLines -join '; ')"
+                Write-Host "  [ERROR] Error output from init script:" -ForegroundColor Red
+                $errorLines | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
             }
+            Write-Host "  [WARN] Dummy data initialization had issues. Check output above." -ForegroundColor Yellow
+            Write-Host "  You can run it manually: powershell -ExecutionPolicy Bypass -File init-dummy-data-all.ps1" -ForegroundColor Gray
+            $script:stepResults["Step 8: Initialize Dummy Data"] = "WARNING"
+            $script:errors += "Step 8: $errorMsg"
         }
+    } catch {
+        $errorMsg = "Exception while running init script: $($_.Exception.Message)"
+        $script:errors += "Step 8: $errorMsg"
+        $script:stepResults["Step 8: Initialize Dummy Data"] = "FAILED"
+        $script:overallSuccess = $false
+        Write-Host "  [ERROR] $errorMsg" -ForegroundColor Red
+        Write-Host "  You can run it manually: powershell -ExecutionPolicy Bypass -File init-dummy-data-all.ps1" -ForegroundColor Gray
     }
-    
-    # 5.1: Initialize catalog data
-    Write-Host "  Initializing catalog data..." -ForegroundColor Gray
-    $catalogSqlFile = Join-Path $scriptDir "init-dummy-data-catalog.sql"
-    if (Test-Path $catalogSqlFile) {
-        docker cp $catalogSqlFile library-postgres:/tmp/init-dummy-data-catalog.sql | Out-Null
-        docker exec -i library-postgres psql -U postgres -d catalog_db -f /tmp/init-dummy-data-catalog.sql | Out-Null
-        Write-Host "    [OK] Catalog data initialized" -ForegroundColor Green
+} else {
+    Write-Host "  [WARN] init-dummy-data-all.ps1 not found. Skipping dummy data initialization." -ForegroundColor Yellow
+    Write-Host "  Expected path: $initScript" -ForegroundColor Gray
+    Write-Host "  You can initialize dummy data manually later." -ForegroundColor Gray
+    $script:stepResults["Step 8: Initialize Dummy Data"] = "SKIPPED"
+}
+
+Write-Host ""
+
+# Step 9: Final verification
+Write-Host "Step 9: Final verification..." -ForegroundColor Yellow
+Write-Host "  Service status:" -ForegroundColor Gray
+try {
+    $finalStatusOutput = docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host $finalStatusOutput
+        $script:stepResults["Step 9: Final Verification"] = "SUCCESS"
     } else {
-        Write-Host "    [WARN] Catalog SQL file not found: $catalogSqlFile" -ForegroundColor Yellow
+        $errorMsg = "Failed to get final service status: $finalStatusOutput"
+        $script:errors += "Step 9: $errorMsg"
+        $script:stepResults["Step 9: Final Verification"] = "WARNING"
+        Write-Host "  [WARN] Could not display service status" -ForegroundColor Yellow
+        Write-Host "  [INFO] Error: $finalStatusOutput" -ForegroundColor Gray
     }
-    
-    # 5.2: Initialize policy data
-    Write-Host "  Initializing policy data..." -ForegroundColor Gray
-    $policySqlFile = Join-Path $scriptDir "init-dummy-data-policy.sql"
-    if (Test-Path $policySqlFile) {
-        docker cp $policySqlFile library-postgres:/tmp/init-dummy-data-policy.sql | Out-Null
-        docker exec -i library-postgres psql -U postgres -d policy_db -f /tmp/init-dummy-data-policy.sql | Out-Null
-        Write-Host "    [OK] Policy data initialized" -ForegroundColor Green
-    } else {
-        Write-Host "    [WARN] Policy SQL file not found: $policySqlFile" -ForegroundColor Yellow
+} catch {
+    $errorMsg = "Exception while getting final service status: $($_.Exception.Message)"
+    $script:errors += "Step 9: $errorMsg"
+    $script:stepResults["Step 9: Final Verification"] = "WARNING"
+    Write-Host "  [WARN] Could not display service status" -ForegroundColor Yellow
+    Write-Host "  [INFO] Error details: $($_.Exception.Message)" -ForegroundColor Gray
+}
+
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "FINAL SUMMARY" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
+
+# Display step results
+Write-Host "Step Results:" -ForegroundColor Yellow
+foreach ($step in $script:stepResults.Keys | Sort-Object) {
+    $status = $script:stepResults[$step]
+    $color = switch ($status) {
+        "SUCCESS" { "Green" }
+        "WARNING" { "Yellow" }
+        "FAILED" { "Red" }
+        "SKIPPED" { "Gray" }
+        default { "Gray" }
     }
-    
-    # 5.3: Create and approve admin user
-    Write-Host "  Setting up admin user..." -ForegroundColor Gray
-    
-    # Delete existing user if it exists
-    if (Test-AdminUserExists) {
-        Remove-AdminUser
+    Write-Host "  $step : $status" -ForegroundColor $color
+}
+
+Write-Host ""
+
+# Display overall status
+if ($script:overallSuccess) {
+    Write-Host "Overall Status: " -NoNewline -ForegroundColor Yellow
+    Write-Host "SUCCESS" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Setup completed successfully!" -ForegroundColor Green
+} else {
+    Write-Host "Overall Status: " -NoNewline -ForegroundColor Yellow
+    Write-Host "FAILED" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Setup completed with errors. Please review the errors below." -ForegroundColor Red
+}
+
+# Display errors if any
+if ($script:errors.Count -gt 0) {
+    Write-Host ""
+    Write-Host "Errors Encountered:" -ForegroundColor Red
+    for ($i = 0; $i -lt $script:errors.Count; $i++) {
+        Write-Host "  $($i + 1). $($script:errors[$i])" -ForegroundColor Red
     }
-    
-    # Create user via API
-    if (-not (New-AdminUser)) {
-        Write-Host "    [ERROR] Failed to create admin user" -ForegroundColor Red
-        Write-Host "    You can retry later with: .\setup-admin-user.ps1" -ForegroundColor Yellow
-    } else {
-        # Approve user
-        if (-not (Approve-AdminUser)) {
-            Write-Host "    [ERROR] Failed to approve admin user" -ForegroundColor Red
-        } else {
-            Write-Host "    [OK] Admin user created and approved" -ForegroundColor Green
-        }
-    }
-    
+}
+
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "Next Steps:" -ForegroundColor Yellow
+Write-Host "  1. Verify services: docker compose ps" -ForegroundColor Gray
+Write-Host "  2. Check logs: docker compose logs -f [service-name]" -ForegroundColor Gray
+Write-Host "  3. Access API Gateway: http://localhost:8080" -ForegroundColor Gray
+Write-Host "  4. Access RabbitMQ Management: http://localhost:15672 (admin/admin)" -ForegroundColor Gray
+Write-Host ""
+
+if ($script:stepResults["Step 8: Initialize Dummy Data"] -eq "SUCCESS") {
+    Write-Host "User Credentials:" -ForegroundColor Yellow
+    Write-Host "Admin:" -ForegroundColor Cyan
+    Write-Host "  Username: admin1" -ForegroundColor Gray
+    Write-Host "  Password: 12345678a" -ForegroundColor Gray
+    Write-Host "  Email: admin@gmail.com" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "Student:" -ForegroundColor Cyan
+    Write-Host "  Username: student1" -ForegroundColor Gray
+    Write-Host "  Password: 12345678s" -ForegroundColor Gray
+    Write-Host "  Email: student1@example.com" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "Faculty:" -ForegroundColor Cyan
+    Write-Host "  Username: faculty1" -ForegroundColor Gray
+    Write-Host "  Password: 12345678f" -ForegroundColor Gray
+    Write-Host "  Email: faculty1@example.com" -ForegroundColor Gray
     Write-Host ""
 }
 
-# ============================================================================
-# Summary
-# ============================================================================
-Write-Host "========================================" -ForegroundColor Green
-Write-Host "  Setup Complete!                      " -ForegroundColor Green
-Write-Host "========================================" -ForegroundColor Green
+Write-Host "To stop all services: docker compose down" -ForegroundColor Gray
+Write-Host "To view logs: docker compose logs -f" -ForegroundColor Gray
 Write-Host ""
 
-if (-not $SkipInit) {
-    Write-Host "Admin Credentials:" -ForegroundColor Cyan
-    Write-Host "  Username: admin1" -ForegroundColor White
-    Write-Host "  Password: 12345678a" -ForegroundColor White
-    Write-Host "  Email: admin@gmail.com" -ForegroundColor White
-    Write-Host ""
+# Exit with appropriate code
+if (-not $script:overallSuccess) {
+    exit 1
 }
-
-Write-Host "Services:" -ForegroundColor Cyan
-Write-Host "  API Gateway: http://localhost:8080" -ForegroundColor White
-Write-Host "  RabbitMQ Management: http://localhost:15672 (admin/admin)" -ForegroundColor White
-Write-Host ""
-
-Write-Host "Useful commands:" -ForegroundColor Cyan
-Write-Host "  docker compose ps              # Check service status" -ForegroundColor Gray
-Write-Host "  docker compose logs -f         # View all logs" -ForegroundColor Gray
-Write-Host "  docker compose down            # Stop all services" -ForegroundColor Gray
-Write-Host "  .\check-services.ps1          # Check service health" -ForegroundColor Gray
-Write-Host ""
-
