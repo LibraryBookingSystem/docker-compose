@@ -146,30 +146,48 @@ ON CONFLICT (name) DO NOTHING;
 -- SECTION 3: USER_DB - Hardcoded Users (Admin, Student, Faculty)
 -- ============================================================================
 -- Database: user_db
--- Creates: 3 hardcoded users (admin1, student1, faculty1)
+-- Creates: 6 hardcoded users (admin1, admin2, student1, student2, faculty1, faculty2)
 --
 -- IMPORTANT: Users should be created via API to ensure correct password hashing
 -- Use: powershell -ExecutionPolicy Bypass -File setup-admin-user.ps1
 --      powershell -ExecutionPolicy Bypass -File setup-dummy-users.ps1
 --
 -- User credentials:
---   Admin:
---     Username: admin1
---     Password: 12345678a
---     Email: admin@gmail.com
---     Role: ADMIN
+--   Admins:
+--     Admin 1:
+--       Username: admin1
+--       Password: 12345678a
+--       Email: admin@gmail.com
+--       Role: ADMIN
+--     Admin 2:
+--       Username: admin2
+--       Password: 12345678a
+--       Email: admin2@gmail.com
+--       Role: ADMIN
 --
---   Student:
---     Username: student1
---     Password: 12345678s
---     Email: student1@example.com
---     Role: STUDENT
+--   Students:
+--     Student 1:
+--       Username: student1
+--       Password: 12345678s
+--       Email: student1@example.com
+--       Role: STUDENT
+--     Student 2:
+--       Username: student2
+--       Password: 12345678s
+--       Email: student2@example.com
+--       Role: STUDENT
 --
 --   Faculty:
---     Username: faculty1
---     Password: 12345678f
---     Email: faculty1@example.com
---     Role: FACULTY
+--     Faculty 1:
+--       Username: faculty1
+--       Password: 12345678f
+--       Email: faculty1@example.com
+--       Role: FACULTY
+--     Faculty 2:
+--       Username: faculty2
+--       Password: 12345678f
+--       Email: faculty2@example.com
+--       Role: FACULTY
 --
 -- NOTE: This section only approves existing users
 -- The users must be created via API first (see setup scripts above)
@@ -185,7 +203,7 @@ SET pending_approval = false,
     rejected = false, 
     restricted = false,
     updated_at = NOW()
-WHERE username IN ('admin1', 'student1', 'faculty1');
+WHERE username IN ('admin1', 'admin2', 'student1', 'student2', 'faculty1', 'faculty2');
 
 -- ============================================================================
 -- NOTES AND SUMMARY
@@ -194,7 +212,7 @@ WHERE username IN ('admin1', 'student1', 'faculty1');
 -- What gets created:
 --   - Resources: 18 total (6 study rooms, 6 computer stations, 6 seats)
 --   - Policies: 4 default booking policies
---   - Users: 3 hardcoded users (admin1, student1, faculty1) - created via API, approved via SQL
+--   - Users: 6 hardcoded users (admin1, admin2, student1, student2, faculty1, faculty2) - created via API, approved via SQL
 --
 -- What is NOT created here (created dynamically):
 --   - Bookings: Created by users through the application

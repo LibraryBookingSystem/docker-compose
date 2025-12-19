@@ -23,8 +23,20 @@ $users = @(
         Role = "STUDENT"
     },
     @{
+        Username = "student2"
+        Email = "student2@example.com"
+        Password = "12345678s"
+        Role = "STUDENT"
+    },
+    @{
         Username = "faculty1"
         Email = "faculty1@example.com"
+        Password = "12345678f"
+        Role = "FACULTY"
+    },
+    @{
+        Username = "faculty2"
+        Email = "faculty2@example.com"
         Password = "12345678f"
         Role = "FACULTY"
     }

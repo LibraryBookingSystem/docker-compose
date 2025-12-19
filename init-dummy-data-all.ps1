@@ -28,23 +28,38 @@ docker exec library-postgres psql -U postgres -d catalog_db -c "SELECT COUNT(*) 
 Write-Host "Policies count:" -ForegroundColor Cyan
 docker exec library-postgres psql -U postgres -d policy_db -c "SELECT COUNT(*) FROM booking_policies;"
 Write-Host "Users:" -ForegroundColor Cyan
-docker exec library-postgres psql -U postgres -d user_db -c "SELECT username, email, role, pending_approval FROM users WHERE username IN ('admin1', 'student1', 'faculty1') ORDER BY role, username;"
+docker exec library-postgres psql -U postgres -d user_db -c "SELECT username, email, role, pending_approval FROM users WHERE username IN ('admin1', 'admin2', 'student1', 'student2', 'faculty1', 'faculty2') ORDER BY role, username;"
 
 Write-Host ""
 Write-Host "User Credentials:" -ForegroundColor Green
-Write-Host "Admin:" -ForegroundColor Cyan
-Write-Host "  Username: admin1" -ForegroundColor Gray
-Write-Host "  Password: 12345678a" -ForegroundColor Gray
-Write-Host "  Email: admin@gmail.com" -ForegroundColor Gray
+Write-Host "Admins:" -ForegroundColor Cyan
+Write-Host "  Admin 1:" -ForegroundColor Yellow
+Write-Host "    Username: admin1" -ForegroundColor Gray
+Write-Host "    Password: 12345678a" -ForegroundColor Gray
+Write-Host "    Email: admin@gmail.com" -ForegroundColor Gray
+Write-Host "  Admin 2:" -ForegroundColor Yellow
+Write-Host "    Username: admin2" -ForegroundColor Gray
+Write-Host "    Password: 12345678a" -ForegroundColor Gray
+Write-Host "    Email: admin2@gmail.com" -ForegroundColor Gray
 Write-Host ""
-Write-Host "Student:" -ForegroundColor Cyan
-Write-Host "  Username: student1" -ForegroundColor Gray
-Write-Host "  Password: 12345678s" -ForegroundColor Gray
-Write-Host "  Email: student1@example.com" -ForegroundColor Gray
+Write-Host "Students:" -ForegroundColor Cyan
+Write-Host "  Student 1:" -ForegroundColor Yellow
+Write-Host "    Username: student1" -ForegroundColor Gray
+Write-Host "    Password: 12345678s" -ForegroundColor Gray
+Write-Host "    Email: student1@example.com" -ForegroundColor Gray
+Write-Host "  Student 2:" -ForegroundColor Yellow
+Write-Host "    Username: student2" -ForegroundColor Gray
+Write-Host "    Password: 12345678s" -ForegroundColor Gray
+Write-Host "    Email: student2@example.com" -ForegroundColor Gray
 Write-Host ""
 Write-Host "Faculty:" -ForegroundColor Cyan
-Write-Host "  Username: faculty1" -ForegroundColor Gray
-Write-Host "  Password: 12345678f" -ForegroundColor Gray
-Write-Host "  Email: faculty1@example.com" -ForegroundColor Gray
+Write-Host "  Faculty 1:" -ForegroundColor Yellow
+Write-Host "    Username: faculty1" -ForegroundColor Gray
+Write-Host "    Password: 12345678f" -ForegroundColor Gray
+Write-Host "    Email: faculty1@example.com" -ForegroundColor Gray
+Write-Host "  Faculty 2:" -ForegroundColor Yellow
+Write-Host "    Username: faculty2" -ForegroundColor Gray
+Write-Host "    Password: 12345678f" -ForegroundColor Gray
+Write-Host "    Email: faculty2@example.com" -ForegroundColor Gray
 Write-Host ""
 Write-Host "Done!" -ForegroundColor Green
