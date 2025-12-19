@@ -105,3 +105,5 @@ Write-Host "To view logs directly in database:" -ForegroundColor Cyan
 Write-Host "  docker exec -it library-postgres psql -U postgres -d analytics_db" -ForegroundColor Gray
 Write-Host "  SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 20;" -ForegroundColor Gray
 Write-Host ""
+
+

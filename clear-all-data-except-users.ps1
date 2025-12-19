@@ -121,3 +121,5 @@ Write-Host "  2. Re-initialize policies: .\init-dummy-data-policy.sql" -Foregrou
 Write-Host "  3. Or create new data through the UI" -ForegroundColor Gray
 Write-Host ""
 
+
+

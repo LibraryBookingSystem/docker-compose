@@ -79,3 +79,5 @@ END $$;
 -- UNION ALL
 -- SELECT 'notifications', COUNT(*) FROM notifications;
 
+
+
