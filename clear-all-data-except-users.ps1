@@ -120,3 +120,4 @@ Write-Host "  1. Re-initialize resources: .\init-dummy-data-catalog.sql" -Foregr
 Write-Host "  2. Re-initialize policies: .\init-dummy-data-policy.sql" -ForegroundColor Gray
 Write-Host "  3. Or create new data through the UI" -ForegroundColor Gray
 Write-Host ""
+

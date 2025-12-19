@@ -78,3 +78,4 @@ END $$;
 -- SELECT 'booking_policies', COUNT(*) FROM booking_policies
 -- UNION ALL
 -- SELECT 'notifications', COUNT(*) FROM notifications;
+

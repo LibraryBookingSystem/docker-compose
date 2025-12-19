@@ -107,11 +107,26 @@ try {
         exit 1
     }
     
-    Write-Host "  Building common-aspects with Maven (verbose output)..." -ForegroundColor Gray
+    Write-Host "  Building common-aspects with Maven (using persistent cache)..." -ForegroundColor Gray
     Write-Host "  ========================================" -ForegroundColor DarkGray
     
-    # Stream output in real-time - docker run outputs directly to console
-    docker run --rm -v "${commonAspectsPath}:/app" -w /app maven:3.9-eclipse-temurin-17 mvn clean package -DskipTests -B
+    # Create a named volume for Maven cache if it doesn't exist
+    # This persists Maven dependencies across builds, avoiding re-downloads
+    $mavenCacheVolume = "library-maven-cache"
+    $volumeExists = docker volume ls -q | Select-String -Pattern "^${mavenCacheVolume}$"
+    if (-not $volumeExists) {
+        Write-Host "  Creating Maven cache volume..." -ForegroundColor Gray
+        docker volume create $mavenCacheVolume | Out-Null
+    }
+    
+    # Use docker run with volume mount for Maven cache
+    # The cache persists across runs, so dependencies are only downloaded once
+    docker run --rm `
+        -v "${commonAspectsPath}:/app" `
+        -v "${mavenCacheVolume}:/root/.m2" `
+        -w /app `
+        maven:3.9-eclipse-temurin-17 `
+        mvn clean package -DskipTests -B
     
     if ($LASTEXITCODE -ne 0) {
         $errorMsg = "Failed to build common-aspects (exit code: $LASTEXITCODE)"
@@ -404,26 +419,26 @@ if (-not $gatewayReady) {
 
 Write-Host ""
 
-# Step 8: Initialize dummy data
-Write-Host "Step 8: Initializing dummy data..." -ForegroundColor Yellow
+# Step 8: Initialize minimal users (admin + faculty only)
+Write-Host "Step 8: Creating minimal users (admin + faculty only)..." -ForegroundColor Yellow
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $scriptPath) {
     $scriptPath = Get-Location
 }
-$initScript = Join-Path $scriptPath "init-dummy-data-all.ps1"
+$initScript = Join-Path $scriptPath "setup-minimal-users.ps1"
 
 if (Test-Path $initScript) {
-    Write-Host "  Running init-dummy-data-all.ps1..." -ForegroundColor Gray
+    Write-Host "  Running setup-minimal-users.ps1..." -ForegroundColor Gray
     try {
         # Capture both stdout and stderr
         $initOutput = & $initScript 2>&1
         $initExitCode = $LASTEXITCODE
         
         if ($initExitCode -eq 0) {
-            Write-Host "  [OK] Dummy data initialized successfully" -ForegroundColor Green
-            $script:stepResults["Step 8: Initialize Dummy Data"] = "SUCCESS"
+            Write-Host "  [OK] Minimal users created successfully" -ForegroundColor Green
+            $script:stepResults["Step 8: Create Minimal Users"] = "SUCCESS"
         } else {
-            $errorMsg = "Dummy data initialization failed with exit code: $initExitCode"
+            $errorMsg = "User creation failed with exit code: $initExitCode"
             # Check if there are any error messages in the output
             $errorLines = $initOutput | Where-Object { $_ -match "ERROR|Error|error|FAILED|Failed|failed|Exception" }
             if ($errorLines) {
@@ -431,24 +446,24 @@ if (Test-Path $initScript) {
                 Write-Host "  [ERROR] Error output from init script:" -ForegroundColor Red
                 $errorLines | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
             }
-            Write-Host "  [WARN] Dummy data initialization had issues. Check output above." -ForegroundColor Yellow
-            Write-Host "  You can run it manually: powershell -ExecutionPolicy Bypass -File init-dummy-data-all.ps1" -ForegroundColor Gray
-            $script:stepResults["Step 8: Initialize Dummy Data"] = "WARNING"
+            Write-Host "  [WARN] User creation had issues. Check output above." -ForegroundColor Yellow
+            Write-Host "  You can run it manually: powershell -ExecutionPolicy Bypass -File setup-minimal-users.ps1" -ForegroundColor Gray
+            $script:stepResults["Step 8: Create Minimal Users"] = "WARNING"
             $script:errors += "Step 8: $errorMsg"
         }
     } catch {
         $errorMsg = "Exception while running init script: $($_.Exception.Message)"
         $script:errors += "Step 8: $errorMsg"
-        $script:stepResults["Step 8: Initialize Dummy Data"] = "FAILED"
+        $script:stepResults["Step 8: Create Minimal Users"] = "FAILED"
         $script:overallSuccess = $false
         Write-Host "  [ERROR] $errorMsg" -ForegroundColor Red
-        Write-Host "  You can run it manually: powershell -ExecutionPolicy Bypass -File init-dummy-data-all.ps1" -ForegroundColor Gray
+        Write-Host "  You can run it manually: powershell -ExecutionPolicy Bypass -File setup-minimal-users.ps1" -ForegroundColor Gray
     }
 } else {
-    Write-Host "  [WARN] init-dummy-data-all.ps1 not found. Skipping dummy data initialization." -ForegroundColor Yellow
+    Write-Host "  [WARN] setup-minimal-users.ps1 not found. Skipping user creation." -ForegroundColor Yellow
     Write-Host "  Expected path: $initScript" -ForegroundColor Gray
-    Write-Host "  You can initialize dummy data manually later." -ForegroundColor Gray
-    $script:stepResults["Step 8: Initialize Dummy Data"] = "SKIPPED"
+    Write-Host "  You can create users manually later." -ForegroundColor Gray
+    $script:stepResults["Step 8: Create Minimal Users"] = "SKIPPED"
 }
 
 Write-Host ""
@@ -529,22 +544,26 @@ Write-Host "  3. Access API Gateway: http://localhost:8080" -ForegroundColor Gra
 Write-Host "  4. Access RabbitMQ Management: http://localhost:15672 (admin/admin)" -ForegroundColor Gray
 Write-Host ""
 
-if ($script:stepResults["Step 8: Initialize Dummy Data"] -eq "SUCCESS") {
+if ($script:stepResults["Step 8: Create Minimal Users"] -eq "SUCCESS") {
     Write-Host "User Credentials:" -ForegroundColor Yellow
     Write-Host "Admin:" -ForegroundColor Cyan
     Write-Host "  Username: admin1" -ForegroundColor Gray
     Write-Host "  Password: 12345678a" -ForegroundColor Gray
     Write-Host "  Email: admin@gmail.com" -ForegroundColor Gray
     Write-Host ""
-    Write-Host "Student:" -ForegroundColor Cyan
-    Write-Host "  Username: student1" -ForegroundColor Gray
-    Write-Host "  Password: 12345678s" -ForegroundColor Gray
-    Write-Host "  Email: student1@example.com" -ForegroundColor Gray
-    Write-Host ""
     Write-Host "Faculty:" -ForegroundColor Cyan
     Write-Host "  Username: faculty1" -ForegroundColor Gray
     Write-Host "  Password: 12345678f" -ForegroundColor Gray
     Write-Host "  Email: faculty1@example.com" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "Students:" -ForegroundColor Cyan
+    Write-Host "  Username: student1" -ForegroundColor Gray
+    Write-Host "  Password: 12345678s" -ForegroundColor Gray
+    Write-Host "  Email: student1@example.com" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  Username: student2" -ForegroundColor Gray
+    Write-Host "  Password: 12345678s" -ForegroundColor Gray
+    Write-Host "  Email: student2@example.com" -ForegroundColor Gray
     Write-Host ""
 }
 
