@@ -19,6 +19,10 @@
 
 $ErrorActionPreference = "Continue"
 
+# Enable Docker BuildKit for better caching
+$env:DOCKER_BUILDKIT = "1"
+$env:COMPOSE_DOCKER_CLI_BUILD = "1"
+
 # Initialize tracking variables
 $script:stepResults = @{}
 $script:errors = @()
@@ -107,34 +111,67 @@ try {
         exit 1
     }
     
-    Write-Host "  Building common-aspects with Maven (using persistent cache)..." -ForegroundColor Gray
+    Write-Host "  Building common-aspects with Maven (using BuildKit cache)..." -ForegroundColor Gray
     Write-Host "  ========================================" -ForegroundColor DarkGray
+    Write-Host "  Using BuildKit cache mounts - dependencies cached and shared with services" -ForegroundColor Gray
     
-    # Create a named volume for Maven cache if it doesn't exist
-    # This persists Maven dependencies across builds, avoiding re-downloads
-    $mavenCacheVolume = "library-maven-cache"
-    $volumeExists = docker volume ls -q | Select-String -Pattern "^${mavenCacheVolume}$"
-    if (-not $volumeExists) {
-        Write-Host "  Creating Maven cache volume..." -ForegroundColor Gray
-        docker volume create $mavenCacheVolume | Out-Null
-    }
-    
-    # Use docker run with volume mount for Maven cache
-    # The cache persists across runs, so dependencies are only downloaded once
-    docker run --rm `
-        -v "${commonAspectsPath}:/app" `
-        -v "${mavenCacheVolume}:/root/.m2" `
-        -w /app `
-        maven:3.9-eclipse-temurin-17 `
-        mvn clean package -DskipTests -B
+    # Build common-aspects using Dockerfile with BuildKit cache mounts
+    # This uses the same cache ID (maven-cache) as service Dockerfiles, so dependencies are shared
+    # The BuildKit cache persists across builds within the same Docker session
+    docker build `
+        --tag common-aspects:build `
+        --file "${commonAspectsPath}\Dockerfile" `
+        "${commonAspectsPath}" 2>&1 | ForEach-Object {
+            if ($_ -match "ERROR|FAILED|error") {
+                Write-Host "    $_" -ForegroundColor Red
+            } elseif ($_ -match "CACHED|Using cache") {
+                Write-Host "    $_" -ForegroundColor Green
+            } else {
+                Write-Host "    $_" -ForegroundColor Gray
+            }
+        }
     
     if ($LASTEXITCODE -ne 0) {
-        $errorMsg = "Failed to build common-aspects (exit code: $LASTEXITCODE)"
-        $script:errors += "Step 3: $errorMsg"
-        $script:stepResults["Step 3: Build Common-Aspects"] = "FAILED"
-        $script:overallSuccess = $false
-        Write-Host "  [ERROR] $errorMsg" -ForegroundColor Red
-        exit 1
+        $errorMsg = "Failed to build common-aspects with Docker BuildKit"
+        Write-Host "  [WARN] $errorMsg" -ForegroundColor Yellow
+        Write-Host "  Falling back to Maven build with named volume cache..." -ForegroundColor Yellow
+        
+        # Fallback: Use named volume for Maven cache (for compatibility)
+        # Note: This cache won't be shared with service BuildKit caches, but will persist
+        $mavenCacheVolume = "library-maven-cache"
+        $volumeExists = docker volume ls -q | Select-String -Pattern "^${mavenCacheVolume}$"
+        if (-not $volumeExists) {
+            Write-Host "  Creating Maven cache volume..." -ForegroundColor Gray
+            docker volume create $mavenCacheVolume | Out-Null
+        }
+        
+        docker run --rm `
+            -v "${commonAspectsPath}:/app" `
+            -v "${mavenCacheVolume}:/root/.m2" `
+            -w /app `
+            maven:3.9-eclipse-temurin-17 `
+            mvn clean package -DskipTests -B
+        
+        if ($LASTEXITCODE -ne 0) {
+            $errorMsg = "Failed to build common-aspects (exit code: $LASTEXITCODE)"
+            $script:errors += "Step 3: $errorMsg"
+            $script:stepResults["Step 3: Build Common-Aspects"] = "FAILED"
+            $script:overallSuccess = $false
+            Write-Host "  [ERROR] Fallback Maven build also failed" -ForegroundColor Red
+            exit 1
+        }
+    } else {
+        # Extract the jar from the built image
+        Write-Host "  Extracting JAR from build..." -ForegroundColor Gray
+        $containerId = docker create common-aspects:build 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $targetDir = Join-Path $commonAspectsPath "target"
+            if (-not (Test-Path $targetDir)) {
+                New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+            }
+            docker cp "${containerId}:/app/target/common-aspects-1.0.0.jar" "${targetDir}\common-aspects-1.0.0.jar" 2>&1 | Out-Null
+            docker rm $containerId 2>&1 | Out-Null
+        }
     }
     
     Write-Host "  ========================================" -ForegroundColor DarkGray
