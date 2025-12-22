@@ -18,13 +18,13 @@ if (-not $containerRunning) {
     exit 1
 }
 
-Write-Host "Copying SQL script to container..." -ForegroundColor Green
-docker cp clear-all-data-except-users.sql $containerName:/tmp/clear-all-data-except-users.sql
+# Write-Host "Copying SQL script to container..." -ForegroundColor Green
+# docker cp clear-all-data-except-users.sql "$containerName`:/tmp/clear-all-data-except-users.sql"
 
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "ERROR: Failed to copy SQL file to container" -ForegroundColor Red
-    exit 1
-}
+# if ($LASTEXITCODE -ne 0) {
+#    Write-Host "ERROR: Failed to copy SQL file to container" -ForegroundColor Red
+#    exit 1
+# }
 
 Write-Host ""
 Write-Host "Deleting data from each database..." -ForegroundColor Yellow
@@ -34,36 +34,36 @@ Write-Host ""
 Write-Host "[1/5] Deleting bookings from booking_db..." -ForegroundColor Cyan
 docker exec -i $containerName psql -U postgres -d booking_db -c "TRUNCATE TABLE bookings CASCADE;"
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "  ✓ Bookings deleted" -ForegroundColor Green
+    Write-Host "  [OK] Bookings deleted" -ForegroundColor Green
 } else {
-    Write-Host "  ✗ Failed to delete bookings" -ForegroundColor Red
+    Write-Host "  [ERROR] Failed to delete bookings" -ForegroundColor Red
 }
 
 # 2. Delete resources and amenities
 Write-Host "[2/5] Deleting resources from catalog_db..." -ForegroundColor Cyan
 docker exec -i $containerName psql -U postgres -d catalog_db -c "DELETE FROM resource_amenities; TRUNCATE TABLE resources CASCADE;"
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "  ✓ Resources deleted" -ForegroundColor Green
+    Write-Host "  [OK] Resources deleted" -ForegroundColor Green
 } else {
-    Write-Host "  ✗ Failed to delete resources" -ForegroundColor Red
+    Write-Host "  [ERROR] Failed to delete resources" -ForegroundColor Red
 }
 
 # 3. Delete policies
 Write-Host "[3/5] Deleting policies from policy_db..." -ForegroundColor Cyan
 docker exec -i $containerName psql -U postgres -d policy_db -c "TRUNCATE TABLE booking_policies CASCADE;"
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "  ✓ Policies deleted" -ForegroundColor Green
+    Write-Host "  [OK] Policies deleted" -ForegroundColor Green
 } else {
-    Write-Host "  ✗ Failed to delete policies" -ForegroundColor Red
+    Write-Host "  [ERROR] Failed to delete policies" -ForegroundColor Red
 }
 
 # 4. Delete notifications
 Write-Host "[4/5] Deleting notifications from notification_db..." -ForegroundColor Cyan
 docker exec -i $containerName psql -U postgres -d notification_db -c "TRUNCATE TABLE notifications CASCADE;"
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "  ✓ Notifications deleted" -ForegroundColor Green
+    Write-Host "  [OK] Notifications deleted" -ForegroundColor Green
 } else {
-    Write-Host "  ✗ Failed to delete notifications" -ForegroundColor Red
+    Write-Host "  [ERROR] Failed to delete notifications" -ForegroundColor Red
 }
 
 # 5. Delete analytics data
@@ -80,9 +80,9 @@ BEGIN
 END \$\$;
 "@
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "  ✓ Analytics data deleted" -ForegroundColor Green
+    Write-Host "  [OK] Analytics data deleted" -ForegroundColor Green
 } else {
-    Write-Host "  ✗ Failed to delete analytics data (may not exist)" -ForegroundColor Yellow
+    Write-Host "  [ERROR] Failed to delete analytics data (may not exist)" -ForegroundColor Yellow
 }
 
 Write-Host ""
