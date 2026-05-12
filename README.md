@@ -1,5 +1,7 @@
 # Library System Docker Compose Setup
 
+Orchestrates the [Library Booking System](https://github.com/LibraryBookingSystem/Documentation) backend locally: infrastructure, microservices, API gateway, and realtime gateway.
+
 This docker-compose file sets up the entire library booking system with all microservices.
 
 ## Prerequisites
